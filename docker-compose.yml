@@ -1,0 +1,30 @@
+services:
+  sql-server:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: sql-server
+    environment:
+      - ACCEPT_EULA=Y
+      - MSSQL_SA_PASSWORD=Password123!
+    ports:
+      - "1433:1433"
+    networks:
+      - order-network
+
+  order-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: order-api
+    ports:
+      - "5000:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__DefaultConnection=Server=sql-server;Database=OrderDb;User Id=sa;Password=Password123!;TrustServerCertificate=True;
+    depends_on:
+      - sql-server
+    networks:
+      - order-network
+
+networks:
+  order-network:
+    driver: bridge
