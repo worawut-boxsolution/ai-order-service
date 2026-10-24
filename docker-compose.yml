@@ -25,6 +25,21 @@ services:
     networks:
       - order-network
 
+  order-web:
+    build:
+      context: .
+      dockerfile: OrderWeb/Dockerfile
+    container_name: order-web
+    ports:
+      - "8080:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - OrderApiUrl=http://order-api:8080/
+    depends_on:
+      - order-api
+    networks:
+      - order-network
+
 networks:
   order-network:
     driver: bridge

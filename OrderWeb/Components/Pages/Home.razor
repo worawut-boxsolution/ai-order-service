@@ -1,0 +1,206 @@
+@page "/"
+@using OrderWeb.Models
+@using OrderWeb.Services
+@inject OrderClient OrderClient
+@rendermode InteractiveServer
+
+<PageTitle>Order Dashboard</PageTitle>
+
+<div class="container mt-4">
+    <div class="row mb-4">
+        <div class="col">
+            <h1 class="display-5 fw-bold text-primary"><i class="bi bi-cart4"></i> OMS Dashboard</h1>
+            <p class="lead text-secondary">Manage your orders and pricing calculations with ease.</p>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Create Order Section -->
+        <div class="col-lg-5 mb-4">
+            <div class="card shadow-sm border-0">
+                <div class="card-header bg-primary text-white py-3">
+                    <h5 class="card-title mb-0"><i class="bi bi-plus-circle me-2"></i>Create New Order</h5>
+                </div>
+                <div class="card-body p-4">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Customer Name</label>
+                        <input @bind="newOrder.CustomerName" class="form-control" placeholder="Enter customer name" />
+                    </div>
+
+                    <hr />
+
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h6 class="mb-0 fw-bold">Order Items</h6>
+                        <button class="btn btn-outline-success btn-sm" @onclick="AddItem">
+                            <i class="bi bi-plus"></i> Add Item
+                        </button>
+                    </div>
+
+                    @foreach (var item in newOrder.Items)
+                    {
+                        <div class="row g-2 mb-2 align-items-end border rounded p-2 bg-light mx-0">
+                            <div class="col-6">
+                                <label class="small text-muted">Product</label>
+                                <input @bind="item.ProductName" class="form-control form-control-sm" placeholder="Name" />
+                            </div>
+                            <div class="col-3">
+                                <label class="small text-muted">Price</label>
+                                <input @bind="item.Price" type="number" class="form-control form-control-sm" />
+                            </div>
+                            <div class="col-2">
+                                <label class="small text-muted">Qty</label>
+                                <input @bind="item.Quantity" type="number" class="form-control form-control-sm" />
+                            </div>
+                            <div class="col-1 text-end">
+                                <button class="btn btn-link text-danger p-0 mb-1" @onclick="() => RemoveItem(item)">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </div>
+                        </div>
+                    }
+
+                    @if (!newOrder.Items.Any())
+                    {
+                        <p class="text-center text-muted small my-3">No items added yet.</p>
+                    }
+
+                    <div class="mt-4 mb-3">
+                        <label class="form-label fw-bold">Coupon Code</label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="bi bi-tag"></i></span>
+                            <input @bind="newOrder.CouponCode" class="form-control" placeholder="e.g. SAVE10, FLAT50" />
+                        </div>
+                    </div>
+
+                    <button class="btn btn-primary w-100 py-2 mt-2 shadow-sm" @onclick="SubmitOrder" disabled="@isSubmitting">
+                        @if (isSubmitting)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2"></span> <span>Processing...</span>
+                        }
+                        else
+                        {
+                            <span><i class="bi bi-check2-circle me-2"></i>Place Order</span>
+                        }
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Order History Section -->
+        <div class="col-lg-7">
+            <div class="card shadow-sm border-0">
+                <div class="card-header bg-dark text-white py-3 d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0"><i class="bi bi-clock-history me-2"></i>Order History</h5>
+                    <button class="btn btn-sm btn-outline-light" @onclick="LoadOrders">
+                        <i class="bi bi-arrow-clockwise"></i> Refresh
+                    </button>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th class="ps-3">Customer</th>
+                                    <th class="text-end">Subtotal</th>
+                                    <th class="text-end">Discount</th>
+                                    <th class="text-end">VAT (7%)</th>
+                                    <th class="text-end text-primary">Net Amount</th>
+                                    <th class="text-center">Date</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @if (orders == null)
+                                {
+                                    <tr><td colspan="6" class="text-center py-4"><div class="spinner-border text-primary"></div></td></tr>
+                                }
+                                else if (!orders.Any())
+                                {
+                                    <tr><td colspan="6" class="text-center py-4 text-muted">No orders found.</td></tr>
+                                }
+                                else
+                                {
+                                    @foreach (var order in orders)
+                                    {
+                                        <tr>
+                                            <td class="ps-3 fw-bold">@order.CustomerName</td>
+                                            <td class="text-end">@order.TotalAmount.ToString("N2")</td>
+                                            <td class="text-end text-danger">-@order.DiscountAmount.ToString("N2")</td>
+                                            <td class="text-end">@order.TaxAmount.ToString("N2")</td>
+                                            <td class="text-end fw-bold text-primary">@order.NetAmount.ToString("N2")</td>
+                                            <td class="text-center small">@order.CreatedAt.ToLocalTime().ToString("g")</td>
+                                        </tr>
+                                    }
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private List<OrderResponse>? orders;
+    private CreateOrderViewModel newOrder = new() { Items = new() { new OrderItemViewModel() } };
+    private bool isSubmitting = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadOrders();
+    }
+
+    private async Task LoadOrders()
+    {
+        try
+        {
+            orders = await OrderClient.GetOrdersAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading orders: {ex.Message}");
+        }
+    }
+
+    private void AddItem() => newOrder.Items.Add(new OrderItemViewModel());
+    
+    private void RemoveItem(OrderItemViewModel item) => newOrder.Items.Remove(item);
+
+    private async Task SubmitOrder()
+    {
+        if (string.IsNullOrWhiteSpace(newOrder.CustomerName) || !newOrder.Items.Any()) return;
+
+        isSubmitting = true;
+        try
+        {
+            var result = await OrderClient.CreateOrderAsync(newOrder);
+            if (result != null)
+            {
+                // Reset form
+                newOrder = new() { Items = new() { new OrderItemViewModel() } };
+                await LoadOrders();
+            }
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
+    }
+}
+
+<style>
+    body {
+        background-color: #f8f9fa;
+    }
+    .card {
+        border-radius: 12px;
+    }
+    .table thead th {
+        font-size: 0.85rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+</style>
+
+<!-- Add Bootstrap Icons -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">

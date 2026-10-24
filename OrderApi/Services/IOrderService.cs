@@ -1,6 +1,9 @@
 namespace OrderApi.Services;
 
+using OrderApi.DTOs;
+using OrderApi.Models;
+
 public interface IOrderService
 {
-    decimal CalculateNetAmount(decimal total, decimal discount);
+    Order CalculateOrder(CreateOrderRequest request);
 }

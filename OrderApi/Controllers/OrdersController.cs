@@ -1,40 +1,72 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using OrderApi.Data;
+using OrderApi.DTOs;
 using OrderApi.Models;
 using OrderApi.Services;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
 
-namespace OrderApi.Controllers;
-
-[ApiController]
-[Route("api/[controller]")]
-public class OrdersController : ControllerBase
+namespace OrderApi.Controllers
 {
-    private readonly OrderDbContext _context;
-    private readonly IOrderService _orderService;
-
-    public OrdersController(OrderDbContext context, IOrderService orderService)
+    [ApiController]
+    [Route("api/[controller]")]
+    public class OrdersController : ControllerBase
     {
-        _context = context;
-        _orderService = orderService;
-    }
+        private readonly OrderDbContext _context;
+        private readonly IOrderService _orderService;
 
-    [HttpGet]
-    public async Task<ActionResult<IEnumerable<Order>>> GetOrders()
-    {
-        return await _context.Orders.ToListAsync();
-    }
+        public OrdersController(OrderDbContext context, IOrderService orderService)
+        {
+            _context = context;
+            _orderService = orderService;
+        }
 
-    [HttpPost]
-    public async Task<ActionResult<Order>> CreateOrder(Order order)
-    {
-        // ใช้ Service คำนวณยอดสุทธิก่อนบันทึก
-        order.NetAmount = _orderService.CalculateNetAmount(order.TotalAmount, order.Discount);
-        order.CreatedAt = DateTime.UtcNow;
+        [HttpGet]
+        public async Task<ActionResult<IEnumerable<OrderResponse>>> GetOrders()
+        {
+            var orders = await _context.Orders.OrderByDescending(o => o.CreatedAt).ToListAsync();
+            
+            var response = orders.Select(o => new OrderResponse
+            {
+                Id = o.Id,
+                CustomerName = o.CustomerName,
+                TotalAmount = o.TotalAmount,
+                DiscountAmount = o.DiscountAmount,
+                TaxAmount = o.TaxAmount,
+                NetAmount = o.NetAmount,
+                CreatedAt = o.CreatedAt
+            });
 
-        _context.Orders.Add(order);
-        await _context.SaveChangesAsync();
+            return Ok(response);
+        }
 
-        return CreatedAtAction(nameof(GetOrders), new { id = order.Id }, order);
+        [HttpPost]
+        public async Task<ActionResult<OrderResponse>> CreateOrder([FromBody] CreateOrderRequest request)
+        {
+            if (request == null || string.IsNullOrWhiteSpace(request.CustomerName))
+            {
+                return BadRequest("Invalid order request.");
+            }
+
+            var order = _orderService.CalculateOrder(request);
+
+            _context.Orders.Add(order);
+            await _context.SaveChangesAsync();
+
+            var response = new OrderResponse
+            {
+                Id = order.Id,
+                CustomerName = order.CustomerName,
+                TotalAmount = order.TotalAmount,
+                DiscountAmount = order.DiscountAmount,
+                TaxAmount = order.TaxAmount,
+                NetAmount = order.NetAmount,
+                CreatedAt = order.CreatedAt
+            };
+
+            return CreatedAtAction(nameof(GetOrders), new { id = order.Id }, response);
+        }
     }
 }
