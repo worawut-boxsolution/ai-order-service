@@ -8,10 +8,10 @@ builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
 // Configure HttpClient for OrderApi
-builder.Services.AddHttpClient<IOrderHttpClient, OrderHttpClient>(client =>
+builder.Services.AddHttpClient<JobApiService>(client => 
 {
-    // Assuming OrderApi runs on http://localhost:5000
-    client.BaseAddress = new Uri("http://localhost:5000/");
+    // กำหนด URL ของ OrderApi (ปรับเปลี่ยนตาม Port จริงของ API)
+    client.BaseAddress = new Uri("http://localhost:5000"); 
 });
 
 var app = builder.Build();

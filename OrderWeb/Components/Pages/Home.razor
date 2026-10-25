@@ -1,197 +1,204 @@
 @page "/"
 @using OrderWeb.Models
 @using OrderWeb.Services
-@inject IOrderHttpClient OrderService
-@inject IJSRuntime JSRuntime
+@inject JobApiService JobService
 @rendermode InteractiveServer
 
-<PageTitle>Order Dashboard</PageTitle>
+<PageTitle>Dashboard - 7-11 Field Service</PageTitle>
 
-<div class="container mt-4">
+<div class="container-fluid py-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h1 class="display-5 fw-bold text-primary"><i class="bi bi-cart4"></i> Order Management</h1>
-        <button class="btn btn-outline-secondary" @onclick="LoadOrders">
-            <i class="bi bi-arrow-clockwise"></i> Refresh
+        <h1 class="h3 mb-0 text-gray-800">แผงควบคุมระบบ (Dashboard)</h1>
+        <button class="btn btn-primary shadow-sm">
+            <i class="bi bi-plus-lg me-1"></i> สร้างใบงานใหม่
         </button>
     </div>
 
-    <div class="row g-4">
-        <!-- Create Order Form -->
-        <div class="col-lg-5">
-            <div class="card shadow-sm border-0">
-                <div class="card-header bg-primary text-white py-3">
-                    <h5 class="card-title mb-0"><i class="bi bi-plus-circle"></i> Create New Order</h5>
-                </div>
-                <div class="card-body p-4">
-                    <EditForm Model="@newOrder" OnValidSubmit="HandleSubmit">
-                        <div class="mb-3">
-                            <label class="form-label fw-semibold">Customer Name</label>
-                            <InputText @bind-Value="newOrder.CustomerName" class="form-control" placeholder="Enter customer name" />
+    <!-- Summary Cards -->
+    <div class="row mb-4">
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-primary shadow h-100 py-2 border-0 border-start border-4 border-primary">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">งานทั้งหมด</div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">@jobs?.Count</div>
                         </div>
-
-                        <div class="mb-3">
-                            <div class="d-flex justify-content-between align-items-center mb-2">
-                                <label class="form-label fw-semibold mb-0">Items</label>
-                                <button type="button" class="btn btn-sm btn-outline-primary" @onclick="AddItem">
-                                    + Add Product
-                                </button>
-                            </div>
-                            
-                            @foreach (var item in newOrder.Items)
-                            {
-                                <div class="row g-2 mb-2 align-items-end border rounded p-2 bg-light">
-                                    <div class="col-6">
-                                        <label class="small text-muted">Product</label>
-                                        <InputText @bind-Value="item.ProductName" class="form-control form-control-sm" placeholder="Name" />
-                                    </div>
-                                    <div class="col-3">
-                                        <label class="small text-muted">Price</label>
-                                        <InputNumber @bind-Value="item.Price" class="form-control form-control-sm" />
-                                    </div>
-                                    <div class="col-2">
-                                        <label class="small text-muted">Qty</label>
-                                        <InputNumber @bind-Value="item.Quantity" class="form-control form-control-sm" />
-                                    </div>
-                                    <div class="col-1 text-end">
-                                        <button type="button" class="btn btn-sm btn-link text-danger p-0" @onclick="() => RemoveItem(item)">
-                                            <i class="bi bi-trash"></i>
-                                        </button>
-                                    </div>
-                                </div>
-                            }
+                        <div class="col-auto">
+                            <i class="bi bi-calendar-event fs-2 text-gray-300"></i>
                         </div>
-
-                        <div class="mb-4">
-                            <label class="form-label fw-semibold">Coupon Code</label>
-                            <InputText @bind-Value="newOrder.CouponCode" class="form-control" placeholder="SAVE10, FLAT50" />
-                            <div class="form-text text-info">SAVE10 (10% off) | FLAT50 (50 THB off)</div>
-                        </div>
-
-                        <div class="d-grid">
-                            <button type="submit" class="btn btn-primary btn-lg" disabled="@isSubmitting">
-                                @if (isSubmitting)
-                                {
-                                    <span class="spinner-border spinner-border-sm me-2"></span>
-                                }
-                                Place Order
-                            </button>
-                        </div>
-                    </EditForm>
+                    </div>
                 </div>
             </div>
         </div>
 
-        <!-- Order List -->
-        <div class="col-lg-7">
-            <div class="card shadow-sm border-0">
-                <div class="card-header bg-dark text-white py-3">
-                    <h5 class="card-title mb-0"><i class="bi bi-list-ul"></i> Recent Orders</h5>
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-warning shadow h-100 py-2 border-0 border-start border-4 border-warning">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">รอดำเนินการ (Pending)</div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">@jobs?.Count(j => j.Status == JobStatus.Pending)</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="bi bi-clock-history fs-2 text-gray-300"></i>
+                        </div>
+                    </div>
                 </div>
-                <div class="card-body p-0">
-                    <div class="table-responsive">
-                        <table class="table table-hover align-middle mb-0">
-                            <thead class="table-light">
-                                <tr>
-                                    <th class="ps-3">ID</th>
-                                    <th>Customer</th>
-                                    <th>Total</th>
-                                    <th>Discount</th>
-                                    <th>Net</th>
-                                    <th class="pe-3">Date</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @if (orders == null)
-                                {
-                                    <tr>
-                                        <td colspan="6" class="text-center py-5">
-                                            <div class="spinner-border text-primary"></div>
-                                            <p class="mt-2 text-muted">Loading orders...</p>
-                                        </td>
-                                    </tr>
-                                }
-                                else if (!orders.Any())
-                                {
-                                    <tr>
-                                        <td colspan="6" class="text-center py-5 text-muted">
-                                            No orders found.
-                                        </td>
-                                    </tr>
-                                }
-                                else
-                                {
-                                    @foreach (var order in orders)
-                                    {
-                                        <tr>
-                                            <td class="ps-3"><span class="badge bg-secondary">#@order.Id</span></td>
-                                            <td><span class="fw-bold">@order.CustomerName</span></td>
-                                            <td>@order.TotalAmount.ToString("N2")</td>
-                                            <td class="text-danger">-@order.DiscountAmount.ToString("N2")</td>
-                                            <td class="fw-bold text-success">@order.NetAmount.ToString("N2")</td>
-                                            <td class="pe-3 small text-muted">@order.CreatedAt.ToLocalTime().ToString("g")</td>
-                                        </tr>
-                                    }
-                                }
-                            </tbody>
-                        </table>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-info shadow h-100 py-2 border-0 border-start border-4 border-info">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-info text-uppercase mb-1">กำลังทำงาน (In Progress)</div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">@jobs?.Count(j => j.Status == JobStatus.InProgress)</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="bi bi-tools fs-2 text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-success shadow h-100 py-2 border-0 border-start border-4 border-success">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-success text-uppercase mb-1">เสร็จสิ้น (Completed)</div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">@jobs?.Count(j => j.Status == JobStatus.Completed)</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="bi bi-check-circle fs-2 text-gray-300"></i>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
+
+    <!-- Jobs Table -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between bg-white">
+            <h6 class="m-0 font-weight-bold text-primary">รายการใบงานล่าสุด</h6>
+            <div class="dropdown no-arrow">
+                <button class="btn btn-sm btn-outline-secondary">
+                    <i class="bi bi-filter"></i> กรองข้อมูล
+                </button>
+            </div>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="ps-4">เลขที่ใบงาน</th>
+                            <th>สาขา</th>
+                            <th>ประเภทงาน</th>
+                            <th>ทีมช่าง</th>
+                            <th>วันที่เริ่ม</th>
+                            <th>สถานะ</th>
+                            <th class="text-center">จัดการ</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (jobs == null)
+                        {
+                            <tr>
+                                <td colspan="7" class="text-center py-5">
+                                    <div class="spinner-border text-primary" role="status">
+                                        <span class="visually-hidden">Loading...</span>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                        else if (!jobs.Any())
+                        {
+                            <tr>
+                                <td colspan="7" class="text-center py-5 text-muted">ไม่พบข้อมูลใบงาน</td>
+                            </tr>
+                        }
+                        else
+                        {
+                            @foreach (var job in jobs)
+                            {
+                                <tr>
+                                    <td class="ps-4 fw-bold text-primary">@job.JobId</td>
+                                    <td>
+                                        <div class="d-flex flex-column">
+                                            <span>@job.BranchName</span>
+                                            <small class="text-muted">ID: @job.BranchCode</small>
+                                        </div>
+                                    </td>
+                                    <td>@job.JobTypeName</td>
+                                    <td>@job.AssignedTeamName</td>
+                                    <td>@job.StartDate.ToString("dd/MM/yyyy HH:mm")</td>
+                                    <td>
+                                        @switch (job.Status)
+                                        {
+                                            case JobStatus.Pending:
+                                                <span class="badge rounded-pill bg-warning text-dark">รอดำเนินการ</span>
+                                                break;
+                                            case JobStatus.InProgress:
+                                                <span class="badge rounded-pill bg-info text-white">กำลังทำงาน</span>
+                                                break;
+                                            case JobStatus.Submitted:
+                                                <span class="badge rounded-pill bg-primary text-white">รอตรวจสอบ</span>
+                                                break;
+                                            case JobStatus.Completed:
+                                                <span class="badge rounded-pill bg-success text-white">เสร็จสิ้น</span>
+                                                break;
+                                        }
+                                    </td>
+                                    <td class="text-center">
+                                        <button class="btn btn-sm btn-light border" title="ดูรายละเอียด">
+                                            <i class="bi bi-eye"></i>
+                                        </button>
+                                        @if (job.Status == JobStatus.Pending)
+                                        {
+                                            <button class="btn btn-sm btn-primary ms-1" title="Check-in">
+                                                <i class="bi bi-geo-alt"></i>
+                                            </button>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="card-footer bg-white text-end">
+            <nav aria-label="Page navigation">
+                <ul class="pagination pagination-sm mb-0 justify-content-end">
+                    <li class="page-item disabled"><a class="page-link" href="#">ก่อนหน้า</a></li>
+                    <li class="page-item active"><a class="page-link" href="#">1</a></li>
+                    <li class="page-item"><a class="page-link" href="#">ถัดไป</a></li>
+                </ul>
+            </nav>
+        </div>
+    </div>
 </div>
 
+<style>
+    .border-left-primary { border-left: .25rem solid #4e73df !important; }
+    .border-left-success { border-left: .25rem solid #1cc88a !important; }
+    .border-left-info { border-left: .25rem solid #36b9cc !important; }
+    .border-left-warning { border-left: .25rem solid #f6c23e !important; }
+    .text-xs { font-size: .7rem; }
+</style>
+
 @code {
-    private List<OrderResponse>? orders;
-    private CreateOrderRequest newOrder = new() { Items = new() { new() { ProductName = "Item 1", Price = 100, Quantity = 1 } } };
-    private bool isSubmitting = false;
+    private List<JobDto>? jobs;
 
     protected override async Task OnInitializedAsync()
     {
-        await LoadOrders();
-    }
-
-    private async Task LoadOrders()
-    {
-        orders = await OrderService.GetOrdersAsync();
-    }
-
-    private void AddItem()
-    {
-        newOrder.Items.Add(new OrderItemRequest { ProductName = "New Item", Price = 0, Quantity = 1 });
-    }
-
-    private void RemoveItem(OrderItemRequest item)
-    {
-        if (newOrder.Items.Count > 1)
-        {
-            newOrder.Items.Remove(item);
-        }
-    }
-
-    private async Task HandleSubmit()
-    {
-        if (string.IsNullOrWhiteSpace(newOrder.CustomerName) || !newOrder.Items.Any()) return;
-
-        isSubmitting = true;
-        try
-        {
-            var result = await OrderService.CreateOrderAsync(newOrder);
-            if (result != null)
-            {
-                // Reset form
-                newOrder = new() { Items = new() { new() { ProductName = "Item 1", Price = 100, Quantity = 1 } } };
-                await LoadOrders();
-                await JSRuntime.InvokeVoidAsync("alert", "Order created successfully!");
-            }
-            else
-            {
-                await JSRuntime.InvokeVoidAsync("alert", "Error creating order.");
-            }
-        }
-        finally
-        {
-            isSubmitting = false;
-        }
+        // หน่วงเวลาเล็กน้อยเพื่อให้เห็น Loading effect (ถ้าต้องการ)
+        await Task.Delay(500);
+        jobs = await JobService.GetJobsAsync();
     }
 }
