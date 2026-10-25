@@ -8,10 +8,10 @@ builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
 // Configure HttpClient for OrderApi
-builder.Services.AddHttpClient<OrderClient>(client =>
+builder.Services.AddHttpClient<IOrderHttpClient, OrderHttpClient>(client =>
 {
-    var apiUri = builder.Configuration["OrderApiUrl"] ?? "http://localhost:5000/";
-    client.BaseAddress = new Uri(apiUri);
+    // Assuming OrderApi runs on http://localhost:5000
+    client.BaseAddress = new Uri("http://localhost:5000/");
 });
 
 var app = builder.Build();
@@ -20,6 +20,7 @@ var app = builder.Build();
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Error", createScopeForErrors: true);
+    // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
     app.UseHsts();
 }
 

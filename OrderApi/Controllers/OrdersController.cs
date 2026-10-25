@@ -1,72 +1,44 @@
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using OrderApi.Data;
-using OrderApi.DTOs;
 using OrderApi.Models;
 using OrderApi.Services;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
 
-namespace OrderApi.Controllers
+namespace OrderApi.Controllers;
+
+[ApiController]
+[Route("api/[controller]")]
+public class OrdersController : ControllerBase
 {
-    [ApiController]
-    [Route("api/[controller]")]
-    public class OrdersController : ControllerBase
+    private readonly IOrderService _orderService;
+
+    public OrdersController(IOrderService orderService)
     {
-        private readonly OrderDbContext _context;
-        private readonly IOrderService _orderService;
+        _orderService = orderService;
+    }
 
-        public OrdersController(OrderDbContext context, IOrderService orderService)
+    [HttpPost]
+    [ProducesResponseType(StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<ActionResult<Order>> CreateOrder([FromBody] CreateOrderRequest request)
+    {
+        try
         {
-            _context = context;
-            _orderService = orderService;
+            var result = await _orderService.CreateOrderAsync(request);
+            return CreatedAtAction(nameof(GetAllOrders), new { id = result.Id }, result);
         }
-
-        [HttpGet]
-        public async Task<ActionResult<IEnumerable<OrderResponse>>> GetOrders()
+        catch (ArgumentException ex)
         {
-            var orders = await _context.Orders.OrderByDescending(o => o.CreatedAt).ToListAsync();
-            
-            var response = orders.Select(o => new OrderResponse
-            {
-                Id = o.Id,
-                CustomerName = o.CustomerName,
-                TotalAmount = o.TotalAmount,
-                DiscountAmount = o.DiscountAmount,
-                TaxAmount = o.TaxAmount,
-                NetAmount = o.NetAmount,
-                CreatedAt = o.CreatedAt
-            });
-
-            return Ok(response);
+            return BadRequest(new { message = ex.Message });
         }
-
-        [HttpPost]
-        public async Task<ActionResult<OrderResponse>> CreateOrder([FromBody] CreateOrderRequest request)
+        catch (Exception)
         {
-            if (request == null || string.IsNullOrWhiteSpace(request.CustomerName))
-            {
-                return BadRequest("Invalid order request.");
-            }
-
-            var order = _orderService.CalculateOrder(request);
-
-            _context.Orders.Add(order);
-            await _context.SaveChangesAsync();
-
-            var response = new OrderResponse
-            {
-                Id = order.Id,
-                CustomerName = order.CustomerName,
-                TotalAmount = order.TotalAmount,
-                DiscountAmount = order.DiscountAmount,
-                TaxAmount = order.TaxAmount,
-                NetAmount = order.NetAmount,
-                CreatedAt = order.CreatedAt
-            };
-
-            return CreatedAtAction(nameof(GetOrders), new { id = order.Id }, response);
+            return StatusCode(500, "Internal Server Error");
         }
+    }
+
+    [HttpGet]
+    public async Task<ActionResult<IEnumerable<Order>>> GetAllOrders()
+    {
+        var orders = await _orderService.GetAllOrdersAsync();
+        return Ok(orders);
     }
 }

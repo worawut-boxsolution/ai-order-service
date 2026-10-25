@@ -1,51 +1,69 @@
-using OrderApi.DTOs;
 using OrderApi.Models;
-using System;
-using System.Collections.Generic;
-using System.Linq;
+using OrderApi.Data;
+using Microsoft.EntityFrameworkCore;
 
-namespace OrderApi.Services
+namespace OrderApi.Services;
+
+public class OrderService : IOrderService
 {
-    public class OrderService : IOrderService
+    private readonly OrderDbContext _context;
+
+    public OrderService(OrderDbContext context)
     {
-        public Order CalculateOrder(CreateOrderRequest request)
+        _context = context;
+    }
+
+    public async Task<Order> CreateOrderAsync(CreateOrderRequest request)
+    {
+        // 1. Calculate Total Amount
+        decimal totalAmount = request.Items.Sum(i => i.Price * i.Quantity);
+        
+        if (totalAmount < 0)
+            throw new ArgumentException("Total amount cannot be negative.");
+
+        // 2. Calculate Discount
+        decimal discountAmount = 0;
+        if (!string.IsNullOrEmpty(request.CouponCode))
         {
-            // 1. Total Amount (Subtotal)
-            decimal totalAmount = request.Items.Sum(item => item.Price * item.Quantity);
-
-            // 2. Discount Amount
-            decimal discountAmount = CalculateDiscount(totalAmount, request.CouponCode);
-
-            // 3. Taxable Amount
-            decimal taxableAmount = totalAmount - discountAmount;
-
-            // 4. Tax Amount (VAT 7% Exclude)
-            decimal taxAmount = taxableAmount * 0.07m;
-
-            // 5. Net Amount
-            decimal netAmount = taxableAmount + taxAmount;
-
-            return new Order
+            string coupon = request.CouponCode.ToUpper();
+            if (coupon == "SAVE10")
             {
-                CustomerName = request.CustomerName,
-                TotalAmount = totalAmount,
-                DiscountAmount = discountAmount,
-                TaxAmount = taxAmount,
-                NetAmount = netAmount,
-                CreatedAt = DateTime.UtcNow
-            };
+                discountAmount = totalAmount * 0.10m;
+            }
+            else if (coupon == "FLAT50")
+            {
+                discountAmount = 50m;
+            }
         }
+        
+        // Ensure discount does not exceed total
+        if (discountAmount > totalAmount) discountAmount = totalAmount;
 
-        private decimal CalculateDiscount(decimal total, string? couponCode)
+        // 3. Calculate Tax (7% VAT Exclude)
+        decimal amountAfterDiscount = totalAmount - discountAmount;
+        decimal taxAmount = Math.Round(amountAfterDiscount * 0.07m, 2);
+
+        // 4. Calculate Net Amount
+        decimal netAmount = amountAfterDiscount + taxAmount;
+
+        var order = new Order
         {
-            if (string.IsNullOrWhiteSpace(couponCode)) return 0;
+            CustomerName = request.CustomerName,
+            TotalAmount = totalAmount,
+            DiscountAmount = discountAmount,
+            TaxAmount = taxAmount,
+            NetAmount = netAmount,
+            CreatedAt = DateTime.UtcNow
+        };
 
-            return couponCode.ToUpper() switch
-            {
-                "SAVE10" => total * 0.10m,
-                "FLAT50" => Math.Min(total, 50m),
-                _ => 0
-            };
-        }
+        _context.Orders.Add(order);
+        await _context.SaveChangesAsync();
+
+        return order;
+    }
+
+    public async Task<IEnumerable<Order>> GetAllOrdersAsync()
+    {
+        return await _context.Orders.OrderByDescending(o => o.CreatedAt).ToListAsync();
     }
 }

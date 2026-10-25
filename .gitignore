@@ -48,3 +48,7 @@ bld/
 
 # Docker
 .dockerignore
+
+# AppSettings (Optional: usually kept if they contain non-secrets)
+# appsettings.json
+# appsettings.Development.json

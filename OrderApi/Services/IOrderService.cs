@@ -1,9 +1,9 @@
-namespace OrderApi.Services;
-
-using OrderApi.DTOs;
 using OrderApi.Models;
+
+namespace OrderApi.Services;
 
 public interface IOrderService
 {
-    Order CalculateOrder(CreateOrderRequest request);
+    Task<Order> CreateOrderAsync(CreateOrderRequest request);
+    Task<IEnumerable<Order>> GetAllOrdersAsync();
 }

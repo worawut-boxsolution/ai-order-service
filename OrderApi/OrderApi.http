@@ -1,4 +1,4 @@
-@OrderApi_HostAddress = http://localhost:5144
+@OrderApi_HostAddress = http://localhost:5096
 
 GET {{OrderApi_HostAddress}}/weatherforecast/
 Accept: application/json

@@ -1,97 +1,104 @@
-# Software Requirements Specification (SRS): Order Management System (OMS)
+# Software Requirements Specification (SRS)
+## Project: Order Management System (OMS)
 
-## 1. Project Overview
-ระบบจัดการคำสั่งซื้อ (Order Management System) พัฒนาขึ้นเพื่อจัดการกระบวนการสร้างและเรียกดูข้อมูลการสั่งซื้อ โดยเน้นความถูกต้องของการคำนวณราคาสินค้า ส่วนลด และภาษีมูลค่าเพิ่ม
+### 1. Introduction
+เอกสารฉบับนี้ระบุถึงข้อกำหนดทางเทคนิคและกระบวนการทำงานของระบบจัดการคำสั่งซื้อ (Order Management System) เพื่อใช้เป็นแนวทางในการพัฒนา Backend API และการจัดการฐานข้อมูล
 
-## 2. Business Rules & Logic
+### 2. Functional Requirements
+- ระบบสามารถสร้างคำสั่งซื้อใหม่ (Create Order) พร้อมคำนวณส่วนลดและภาษีได้
+- ระบบสามารถเรียกดูรายการคำสั่งซื้อทั้งหมด (List Orders) ได้
 
-### 2.1 Pricing Calculation
-การคำนวณราคาสุทธิ (Net Amount) จะต้องเป็นไปตามขั้นตอนดังนี้:
-1.  **Total Amount (Subtotal):** ผลรวมของราคาสินค้าทั้งหมดก่อนหักส่วนลด
-2.  **Discount Amount:** คำนวณตามเงื่อนไข Coupon Code (ถ้ามี)
-3.  **Taxable Amount:** `Total Amount - Discount Amount`
-4.  **Tax Amount (VAT 7% Exclude):** `Taxable Amount * 0.07`
-5.  **Net Amount:** `Taxable Amount + Tax Amount`
+### 3. Business Rules & Logic
+การคำนวณราคาสินค้าต้องเป็นไปตามลำดับขั้นตอนดังนี้:
 
-### 2.2 Coupon Rules
-ระบบรองรับคูปองส่วนลด 2 ประเภท:
--   **SAVE10**: ส่วนลด 10% จากยอด Total Amount
--   **FLAT50**: ส่วนลดคงที่ 50 บาท (หาก Total Amount น้อยกว่า 50 บาท ส่วนลดจะเท่ากับ Total Amount)
--   *หมายเหตุ: สามารถใช้คูปองได้เพียง 1 โค้ดต่อ 1 คำสั่งซื้อเท่านั้น*
+#### 3.1 การคำนวณส่วนลด (Discount Calculation)
+รองรับคูปองส่วนลด 2 รูปแบบ:
+1. **SAVE10**: ส่วนลด 10% จากยอดรวมสินค้า (TotalAmount)
+2. **FLAT50**: ส่วนลดคงที่ 50 บาท
+   *หมายเหตุ: หากไม่ระบุคูปอง หรือคูปองไม่ถูกต้อง ส่วนลดจะเป็น 0*
 
-## 3. Functional Requirements
+#### 3.2 การคำนวณภาษี (Tax Calculation)
+- ใช้รูปแบบ **VAT 7% Exclude** (ภาษีมูลค่าเพิ่มแยกจากราคาสินค้า)
+- คำนวณจากยอดหลังหักส่วนลด: `TaxAmount = (TotalAmount - DiscountAmount) * 0.07`
 
-### 3.1 Order Creation
--   ผู้ใช้สามารถส่งรายการสินค้าและชื่อลูกค้าเพื่อสร้าง Order
--   ระบบต้องตรวจสอบความถูกต้องของรหัสส่วนลด
--   ระบบต้องคำนวณยอดเงินทั้งหมดโดยอัตโนมัติก่อนบันทึกลงฐานข้อมูล
+#### 3.3 การคำนวณยอดสุทธิ (Net Amount Calculation)
+- `NetAmount = (TotalAmount - DiscountAmount) + TaxAmount`
 
-### 3.2 Order Retrieval
--   ผู้ใช้สามารถดึงรายการคำสั่งซื้อทั้งหมดออกมาแสดงผลได้
+---
 
-## 4. Data Model (Entity: Order)
-
+### 4. Data Model
+#### Entity: Order
 | Field Name | Data Type | Description |
 | :--- | :--- | :--- |
-| **Id** | UUID / String | Unique Identifier ของคำสั่งซื้อ |
+| **Id** | UUID / Integer | รหัสอ้างอิงคำสั่งซื้อ (Primary Key) |
 | **CustomerName** | String | ชื่อลูกค้า |
-| **TotalAmount** | Decimal | ยอดรวมราคาสินค้าทั้งหมด (ก่อนส่วนลดและภาษี) |
-| **DiscountAmount**| Decimal | มูลค่าส่วนลดที่ได้รับ |
-| **TaxAmount** | Decimal | ภาษีมูลค่าเพิ่ม (VAT 7%) |
-| **NetAmount** | Decimal | ยอดชำระสุทธิ (Total - Discount + Tax) |
+| **TotalAmount** | Decimal | ยอดรวมราคาสินค้าก่อนหักส่วนลด |
+| **DiscountAmount** | Decimal | จำนวนเงินส่วนลดที่ได้รับ |
+| **TaxAmount** | Decimal | จำนวนภาษีมูลค่าเพิ่ม (7%) |
+| **NetAmount** | Decimal | จำนวนเงินสุทธิที่ลูกค้าต้องชำระ |
 | **CreatedAt** | DateTime | วันที่และเวลาที่สร้างรายการ |
 
-## 5. API Contracts
+---
 
-### 5.1 Create Order
-**Endpoint:** `POST /api/orders`
+### 5. API Endpoints Contracts
 
-**Request Body:**
+#### 5.1 Create Order
+สร้างคำสั่งซื้อใหม่พร้อมคำนวณราคาสัตโนมัติ
+
+- **URL:** `/api/orders`
+- **Method:** `POST`
+- **Request Body:**
 ```json
 {
-  "customerName": "John Doe",
+  "customerName": "string",
   "items": [
     {
-      "productName": "Laptop",
-      "price": 30000,
-      "quantity": 1
+      "productName": "string",
+      "price": number,
+      "quantity": number
     }
   ],
-  "couponCode": "SAVE10"
+  "couponCode": "string" // Optional: "SAVE10", "FLAT50"
 }
 ```
 
-**Response (201 Created):**
+- **Response (201 Created):**
 ```json
 {
-  "id": "ord_12345",
+  "id": "ORD-12345",
   "customerName": "John Doe",
-  "totalAmount": 30000.00,
-  "discountAmount": 3000.00,
-  "taxAmount": 1890.00,
-  "netAmount": 28890.00,
+  "totalAmount": 1000.00,
+  "discountAmount": 100.00,
+  "taxAmount": 63.00,
+  "netAmount": 963.00,
   "createdAt": "2023-10-27T10:00:00Z"
 }
 ```
 
-### 5.2 Get Orders
-**Endpoint:** `GET /api/orders`
+#### 5.2 Get All Orders
+เรียกดูรายการคำสั่งซื้อทั้งหมด
 
-**Response (200 OK):**
+- **URL:** `/api/orders`
+- **Method:** `GET`
+- **Response (200 OK):**
 ```json
 [
   {
-    "id": "ord_12345",
+    "id": "ORD-12345",
     "customerName": "John Doe",
-    "totalAmount": 30000.00,
-    "discountAmount": 3000.00,
-    "taxAmount": 1890.00,
-    "netAmount": 28890.00,
+    "totalAmount": 1000.00,
+    "discountAmount": 100.00,
+    "taxAmount": 63.00,
+    "netAmount": 963.00,
     "createdAt": "2023-10-27T10:00:00Z"
   }
 ]
 ```
 
-## 6. Non-Functional Requirements
--   **Accuracy:** การคำนวณทศนิยมต้องใช้ Precision สูง (แนะนำใช้ Decimal แทน Float)
--   **Performance:** การดึงข้อมูลคำสั่งซื้อควรมี Latency ต่ำกว่า 200ms
+---
+
+### 6. Error Handling
+| Status Code | Description |
+| :--- | :--- |
+| 400 Bad Request | ข้อมูล Input ไม่ถูกต้อง หรือ TotalAmount ติดลบ |
+| 500 Internal Server Error | เกิดข้อผิดพลาดที่ระบบ Server |

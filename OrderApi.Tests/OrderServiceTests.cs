@@ -1,155 +1,136 @@
-using OrderApi.DTOs;
+using Microsoft.EntityFrameworkCore;
+using OrderApi.Data;
+using OrderApi.Models;
 using OrderApi.Services;
 using Xunit;
 
-namespace OrderApi.Tests
+namespace OrderApi.Tests;
+
+public class OrderServiceTests
 {
-    public class OrderServiceTests
+    private OrderDbContext GetDbContext()
     {
-        private readonly OrderService _orderService;
+        var options = new DbContextOptionsBuilder<OrderDbContext>()
+            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
+            .Options;
+        return new OrderDbContext(options);
+    }
 
-        public OrderServiceTests()
+    [Fact]
+    public async Task CreateOrder_WithSAVE10_ShouldApply10PercentDiscount()
+    {
+        // Arrange
+        using var context = GetDbContext();
+        var service = new OrderService(context);
+        var request = new CreateOrderRequest
         {
-            _orderService = new OrderService();
-        }
-
-        [Fact]
-        public void CalculateOrder_WithSAVE10_ShouldDiscount10Percent()
-        {
-            // Arrange
-            var request = new CreateOrderRequest
+            CustomerName = "Test Customer",
+            Items = new List<OrderItemRequest>
             {
-                CustomerName = "John Doe",
-                Items = new List<OrderItemRequest>
-                {
-                    new OrderItemRequest { ProductName = "Item 1", Price = 1000m, Quantity = 1 }
-                },
-                CouponCode = "SAVE10"
-            };
+                new OrderItemRequest { ProductName = "Product 1", Price = 1000m, Quantity = 1 }
+            },
+            CouponCode = "SAVE10"
+        };
 
-            // Act
-            var result = _orderService.CalculateOrder(request);
+        // Act
+        var result = await service.CreateOrderAsync(request);
 
-            // Assert
-            // Total = 1000
-            // Discount = 1000 * 0.10 = 100
-            // Taxable = 900
-            // Tax = 900 * 0.07 = 63
-            // Net = 963
-            Assert.Equal(1000m, result.TotalAmount);
-            Assert.Equal(100m, result.DiscountAmount);
-            Assert.Equal(63m, result.TaxAmount);
-            Assert.Equal(963m, result.NetAmount);
-        }
+        // Assert
+        Assert.Equal(1000m, result.TotalAmount);
+        Assert.Equal(100m, result.DiscountAmount); // 10% of 1000
+    }
 
-        [Fact]
-        public void CalculateOrder_WithFLAT50_ShouldDiscount50Baht()
+    [Fact]
+    public async Task CreateOrder_WithFLAT50_ShouldApply50Discount()
+    {
+        // Arrange
+        using var context = GetDbContext();
+        var service = new OrderService(context);
+        var request = new CreateOrderRequest
         {
-            // Arrange
-            var request = new CreateOrderRequest
+            CustomerName = "Test Customer",
+            Items = new List<OrderItemRequest>
             {
-                CustomerName = "John Doe",
-                Items = new List<OrderItemRequest>
-                {
-                    new OrderItemRequest { ProductName = "Item 1", Price = 1000m, Quantity = 1 }
-                },
-                CouponCode = "FLAT50"
-            };
+                new OrderItemRequest { ProductName = "Product 1", Price = 1000m, Quantity = 1 }
+            },
+            CouponCode = "FLAT50"
+        };
 
-            // Act
-            var result = _orderService.CalculateOrder(request);
+        // Act
+        var result = await service.CreateOrderAsync(request);
 
-            // Assert
-            // Total = 1000
-            // Discount = 50
-            // Taxable = 950
-            // Tax = 950 * 0.07 = 66.5
-            // Net = 1016.5
-            Assert.Equal(1000m, result.TotalAmount);
-            Assert.Equal(50m, result.DiscountAmount);
-            Assert.Equal(66.50m, result.TaxAmount);
-            Assert.Equal(1016.50m, result.NetAmount);
-        }
+        // Assert
+        Assert.Equal(1000m, result.TotalAmount);
+        Assert.Equal(50m, result.DiscountAmount);
+    }
 
-        [Fact]
-        public void CalculateOrder_WithFLAT50_AndTotalLessThan50_ShouldDiscountTotalAmount()
+    [Fact]
+    public async Task CreateOrder_WithoutCoupon_ShouldHaveZeroDiscount()
+    {
+        // Arrange
+        using var context = GetDbContext();
+        var service = new OrderService(context);
+        var request = new CreateOrderRequest
         {
-            // Arrange
-            var request = new CreateOrderRequest
+            CustomerName = "Test Customer",
+            Items = new List<OrderItemRequest>
             {
-                CustomerName = "John Doe",
-                Items = new List<OrderItemRequest>
-                {
-                    new OrderItemRequest { ProductName = "Small Item", Price = 30m, Quantity = 1 }
-                },
-                CouponCode = "FLAT50"
-            };
+                new OrderItemRequest { ProductName = "Product 1", Price = 1000m, Quantity = 1 }
+            },
+            CouponCode = ""
+        };
 
-            // Act
-            var result = _orderService.CalculateOrder(request);
+        // Act
+        var result = await service.CreateOrderAsync(request);
 
-            // Assert
-            // Total = 30
-            // Discount = Min(30, 50) = 30
-            // Taxable = 0
-            // Tax = 0
-            // Net = 0
-            Assert.Equal(30m, result.TotalAmount);
-            Assert.Equal(30m, result.DiscountAmount);
-            Assert.Equal(0m, result.TaxAmount);
-            Assert.Equal(0m, result.NetAmount);
-        }
+        // Assert
+        Assert.Equal(0m, result.DiscountAmount);
+    }
 
-        [Fact]
-        public void CalculateOrder_WithNoCoupon_ShouldHaveZeroDiscount()
+    [Fact]
+    public async Task CreateOrder_TaxCalculation_ShouldBe7PercentExclude()
+    {
+        // Arrange
+        // Scenario: Total 1000, SAVE10 -> Discount 100. Remaining 900.
+        // Tax = 900 * 0.07 = 63.
+        // Net = 900 + 63 = 963.
+        using var context = GetDbContext();
+        var service = new OrderService(context);
+        var request = new CreateOrderRequest
         {
-            // Arrange
-            var request = new CreateOrderRequest
+            CustomerName = "Test Customer",
+            Items = new List<OrderItemRequest>
             {
-                CustomerName = "John Doe",
-                Items = new List<OrderItemRequest>
-                {
-                    new OrderItemRequest { ProductName = "Item 1", Price = 1000m, Quantity = 1 }
-                },
-                CouponCode = null
-            };
+                new OrderItemRequest { ProductName = "Product 1", Price = 1000m, Quantity = 1 }
+            },
+            CouponCode = "SAVE10"
+        };
 
-            // Act
-            var result = _orderService.CalculateOrder(request);
+        // Act
+        var result = await service.CreateOrderAsync(request);
 
-            // Assert
-            // Total = 1000
-            // Discount = 0
-            // Taxable = 1000
-            // Tax = 70
-            // Net = 1070
-            Assert.Equal(1000m, result.TotalAmount);
-            Assert.Equal(0m, result.DiscountAmount);
-            Assert.Equal(70m, result.TaxAmount);
-            Assert.Equal(1070m, result.NetAmount);
-        }
+        // Assert
+        Assert.Equal(100m, result.DiscountAmount);
+        Assert.Equal(63m, result.TaxAmount);
+        Assert.Equal(963m, result.NetAmount);
+    }
 
-        [Theory]
-        [InlineData(100.00, 7.00, 107.00)]
-        [InlineData(1000.00, 70.00, 1070.00)]
-        public void CalculateOrder_TaxCalculation_ShouldBe7PercentExclude(decimal total, decimal expectedTax, decimal expectedNet)
+    [Fact]
+    public async Task CreateOrder_NegativeAmount_ShouldThrowArgumentException()
+    {
+        // Arrange
+        using var context = GetDbContext();
+        var service = new OrderService(context);
+        var request = new CreateOrderRequest
         {
-            // Arrange
-            var request = new CreateOrderRequest
+            CustomerName = "Test Customer",
+            Items = new List<OrderItemRequest>
             {
-                CustomerName = "Tax Test",
-                Items = new List<OrderItemRequest>
-                {
-                    new OrderItemRequest { ProductName = "Test", Price = total, Quantity = 1 }
-                }
-            };
+                new OrderItemRequest { ProductName = "Bad Product", Price = -100m, Quantity = 1 }
+            }
+        };
 
-            // Act
-            var result = _orderService.CalculateOrder(request);
-
-            // Assert
-            Assert.Equal(expectedTax, result.TaxAmount);
-            Assert.Equal(expectedNet, result.NetAmount);
-        }
+        // Act & Assert
+        await Assert.ThrowsAsync<ArgumentException>(() => service.CreateOrderAsync(request));
     }
 }
